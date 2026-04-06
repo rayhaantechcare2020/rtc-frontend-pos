@@ -5,6 +5,7 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  NPM_CONFIG_PRODUCTION = "false"
   NODE_ENV = "production"
 
 # Handle React Router routes
@@ -16,6 +17,6 @@
 # API proxy (if needed)
 [[redirects]]
   from = "/api/*"
-  to = "https://your-laravel-backend.com/api/:splat"
+  to = "https://localhost.com:8000/api/:splat"
   status = 200
   force = true
