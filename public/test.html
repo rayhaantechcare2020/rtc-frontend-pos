@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Connection Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .test-section h3 {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+        
+        .url-display {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin-bottom: 15px;
+            word-break: break-all;
+        }
+        
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            border-left: 4px solid #667eea;
+        }
+        
+        .success {
+            border-left-color: #48bb78;
+            background: #f0fff4;
+        }
+        
+        .error {
+            border-left-color: #f56565;
+            background: #fff5f5;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .status-online {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .status-offline {
+            background: #f56565;
+            color: white;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #495057;
+            font-weight: 500;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 API Connection Test</h1>
+        <div class="subtitle">Testing connection to your Laravel backend</div>
+        
+        <div class="test-section">
+            <h3>📡 API Configuration</h3>
+            <div class="url-display" id="apiUrl">Loading...</div>
+            <button onclick="testSimple()">🧪 Test Simple Endpoint</button>
+            <button onclick="testLogin()">🔐 Test Login</button>
+            <button onclick="testCustom()">⚙️ Test Custom URL</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>⚙️ Custom URL Test</h3>
+            <div class="input-group">
+                <label>API URL:</label>
+                <input type="text" id="customUrl" placeholder="http://localhost:8000/api/test" />
+            </div>
+            <button onclick="testCustomUrl()">Test Custom URL</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔐 Login Test</h3>
+            <div class="input-group">
+                <label>Email:</label>
+                <input type="email" id="loginEmail" placeholder="admin@example.com" value="admin@example.com" />
+            </div>
+            <div class="input-group">
+                <label>Password:</label>
+                <input type="password" id="loginPassword" placeholder="password" value="password" />
+            </div>
+            <button onclick="testLoginForm()">Test Login</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>📊 Results</h3>
+            <div id="result" class="result">
+                Click any button to test connection...
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Default API URL
+        let API_BASE = 'http://localhost:8000/api';
+        
+        // Display API URL on load
+        document.getElementById('apiUrl').textContent = API_BASE;
+        
+        // Helper function to update result display
+        function updateResult(success, message, data = null) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${success ? 'success' : 'error'}`;
+            
+            let html = `<strong>${success ? '✅ SUCCESS' : '❌ ERROR'}</strong><br><br>`;
+            html += `<strong>Message:</strong> ${message}<br><br>`;
+            
+            if (data) {
+                html += `<strong>Response Data:</strong><br>`;
+                html += `<pre style="margin-top: 10px; background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;">${JSON.stringify(data, null, 2)}</pre>`;
+            }
+            
+            resultDiv.innerHTML = html;
+        }
+        
+        // Test simple endpoint
+        async function testSimple() {
+            updateResult(false, 'Testing connection...');
+            
+            try {
+                const url = `${API_BASE}/test`;
+                console.log('Testing URL:', url);
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('Response:', data);
+                
+                updateResult(true, `Connected to ${API_BASE}`, data);
+            } catch (error) {
+                console.error('Error:', error);
+                updateResult(false, `Cannot connect to ${API_BASE}\n\nError: ${error.message}\n\nMake sure Laravel is running with: php artisan serve --host=0.0.0.0 --port=8000`);
+            }
+        }
+        
+        // Test login endpoint
+        async function testLogin() {
+            updateResult(false, 'Testing login endpoint...');
+            
+            try {
+                const url = `${API_BASE}/login`;
+                console.log('Testing login URL:', url);
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('Response:', data);
+                
+                updateResult(true, `Login endpoint exists at ${API_BASE}`, data);
+            } catch (error) {
+                console.error('Error:', error);
+                updateResult(false, `Cannot reach login endpoint\n\nError: ${error.message}\n\nThis is normal if the login endpoint only accepts POST requests.`);
+            }
+        }
+        
+        // Test custom URL from input
+        async function testCustomUrl() {
+            const customUrl = document.getElementById('customUrl').value;
+            if (!customUrl) {
+                updateResult(false, 'Please enter a URL to test');
+                return;
+            }
+            
+            updateResult(false, `Testing ${customUrl}...`);
+            
+            try {
+                const response = await fetch(customUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                updateResult(true, `Connected to ${customUrl}`, data);
+            } catch (error) {
+                updateResult(false, `Cannot connect to ${customUrl}\n\nError: ${error.message}`);
+            }
+        }
+        
+        // Test login with credentials
+        async function testLoginForm() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            updateResult(false, `Attempting login as ${email}...`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                console.log('Login response:', data);
+                
+                if (response.ok) {
+                    updateResult(true, `Login successful!`, data);
+                } else {
+                    updateResult(false, `Login failed: ${data.message || 'Invalid credentials'}`, data);
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                updateResult(false, `Cannot reach login endpoint\n\nError: ${error.message}\n\nMake sure Laravel is running at ${API_BASE}`);
+            }
+        }
+        
+        // Test custom endpoint
+        function testCustom() {
+            const customUrl = prompt('Enter API endpoint URL to test:', `${API_BASE}/test`);
+            if (customUrl) {
+                document.getElementById('customUrl').value = customUrl;
+                testCustomUrl();
+            }
+        }
+        
+        // Log any errors to console
+        window.addEventListener('error', (event) => {
+            console.error('Global error:', event.error);
+        });
+    </script>
+</body>
+</html>
