@@ -4,6 +4,7 @@
   publish = "dist"
 
 [build.environment]
+VITE_API_URL = "https://rtcpos.railway.app/api"
   NODE_VERSION = "22"
   NPM_CONFIG_PRODUCTION = "false"
   NODE_ENV = "production"
