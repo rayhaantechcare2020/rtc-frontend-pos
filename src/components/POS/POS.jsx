@@ -88,6 +88,23 @@ const POS = () => {
     }
   };
 
+  // const fetchCategories = async () => {
+  //   try {
+  //     const response = await fetch('http://localhost:8000/api/categories', {
+  //       headers: {
+  //         'Authorization': `Bearer ${localStorage.getItem('token')}`,
+  //         'Accept': 'application/json'
+  //       }
+  //     });
+  //     const data = await response.json();
+  //     if (data.success) {
+  //       setCategories(data.data || []);
+  //     }
+  //   } catch (error) {
+  //     console.error('Error fetching categories:', error);
+  //   }
+  // };
+
   const fetchCategories = async () => {
     try {
       setLoading(true);
