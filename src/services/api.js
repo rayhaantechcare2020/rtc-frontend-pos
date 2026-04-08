@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // Get API URL from environment
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://rtc-pos-backend-production.up.railway.app/api';
 
 console.log('🔧 API URL:', API_URL);
 
