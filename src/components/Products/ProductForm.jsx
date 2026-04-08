@@ -34,22 +34,37 @@ const ProductForm = () => {
     }
   }, [id]);
 
-  const fetchCategories = async () => {
+  // const fetchCategories = async () => {
+  //   try {
+  //     const response = await fetch('https://rtc-pos-backend.up.railway.app/api/categories', {
+  //       headers: {
+  //         'Authorization': `Bearer ${localStorage.getItem('token')}`,
+  //         'Accept': 'application/json'
+  //       }
+  //     });
+  //     const data = await response.json();
+  //     if (data.success) {
+  //       setCategories(data.data || []);
+  //     }
+  //   } catch (error) {
+  //     console.error('Error fetching categories:', error);
+  //   }
+  // };
+
+  const fetchCategories = async() =>
+  {
     try {
-      const response = await fetch('https://rtc-pos-backend.up.railway.app/api/categories', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Accept': 'application/json'
-        }
-      });
+      setCategories(true);
+      const response = await categoryService.getCategories();
+      console.log('Category data:', response);
       const data = await response.json();
-      if (data.success) {
+      if(data.success) {
         setCategories(data.data || []);
       }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
+    }catch (error) {
+      console.error("Error fetching categories");
     }
-  };
+  }
 
   const fetchProduct = async () => {
     try {
