@@ -90,18 +90,25 @@ const POS = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/categories', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Accept': 'application/json'
+      setLoading(true);
+      const response = await categoryService.getCategories();
+     // console.log('Categories response:', response);
+      
+      let categoriesData = [];
+      if (response?.data) {
+        if (Array.isArray(response.data)) {
+          categoriesData = response.data;
+        } else if (response.data.data) {
+          categoriesData = response.data.data;
         }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setCategories(data.data || []);
       }
+      
+      setCategories(categoriesData);
     } catch (error) {
       console.error('Error fetching categories:', error);
+      toast.error('Failed to load categories');
+    } finally {
+      setLoading(false);
     }
   };
 
