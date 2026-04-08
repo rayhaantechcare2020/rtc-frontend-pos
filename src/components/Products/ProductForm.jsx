@@ -51,20 +51,29 @@ const ProductForm = () => {
   //   }
   // };
 
-  const fetchCategories = async() =>
-  {
+const fetchCategories = async () => {
     try {
-      setCategories(true);
+      setLoading(true);
       const response = await categoryService.getCategories();
-      console.log('Category data:', response);
-      const data = await response.json();
-      if(data.success) {
-        setCategories(data.data || []);
+     // console.log('Categories response:', response);
+      
+      let categoriesData = [];
+      if (response?.data) {
+        if (Array.isArray(response.data)) {
+          categoriesData = response.data;
+        } else if (response.data.data) {
+          categoriesData = response.data.data;
+        }
       }
-    }catch (error) {
-      console.error("Error fetching categories");
+      
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      toast.error('Failed to load categories');
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   const fetchProduct = async () => {
     try {
