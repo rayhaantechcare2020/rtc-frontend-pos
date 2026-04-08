@@ -36,7 +36,7 @@ const ProductForm = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/categories', {
+      const response = await fetch('http://rtc-pos-backend.up.railway.app/api/categories', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Accept': 'application/json'
