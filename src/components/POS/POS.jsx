@@ -4,14 +4,13 @@ import { useDispatch, useSelector } from 'react-redux';
 import { addToCart, removeFromCart, updateQuantity, clearCart } from '../../store/cartSlice';
 import { productService } from '../../services/products';
 import { saleService } from '../../services/sale';
-import { holdSaleService } from '../../services/holdSaleService'; 
+import { holdSaleService } from '../../services/holdSaleService';
+import { categoryService } from '../../services/category'; // ✅ ADD THIS IMPORT
 import toast from 'react-hot-toast';
 
 // Lazy load checkout and holdsales modal components
 const Checkout = lazy(() => import('./Checkout'));
 const HoldSalesModal = lazy(() => import('../holdSalesModal'));
-// const Checkout = lazy(() => import('./Checkout'));
-// const HoldSalesModal = lazy(() => import('/HoldSalesModal'));
 
 const POS = () => {
   const [products, setProducts] = useState([]);
@@ -88,44 +87,24 @@ const POS = () => {
     }
   };
 
-  // const fetchCategories = async () => {
-  //   try {
-  //     const response = await fetch('http://localhost:8000/api/categories', {
-  //       headers: {
-  //         'Authorization': `Bearer ${localStorage.getItem('token')}`,
-  //         'Accept': 'application/json'
-  //       }
-  //     });
-  //     const data = await response.json();
-  //     if (data.success) {
-  //       setCategories(data.data || []);
-  //     }
-  //   } catch (error) {
-  //     console.error('Error fetching categories:', error);
-  //   }
-  // };
-
   const fetchCategories = async () => {
     try {
-      setLoading(true);
       const response = await categoryService.getCategories();
-     // console.log('Categories response:', response);
+      console.log('Categories response:', response);
       
       let categoriesData = [];
-      if (response?.data) {
+      if (response?.success) {
         if (Array.isArray(response.data)) {
           categoriesData = response.data;
-        } else if (response.data.data) {
+        } else if (response.data?.data) {
           categoriesData = response.data.data;
         }
       }
       
-      setSelectedCategory(categoriesData);
+      setCategories(categoriesData);
     } catch (error) {
       console.error('Error fetching categories:', error);
       toast.error('Failed to load categories');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -343,19 +322,21 @@ const POS = () => {
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <FiShoppingCart /> Cart ({cart.items.length})
             </h2>
-            {/*hold sales button*/}
-                <button
-                      onClick={() => setShowHoldSales(true)}
-                      className="relative bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-700 transition flex items-center gap-2"
-                    > Held Sales
-                      <FiClock className="text-sm" />
-                      {heldSalesCount > 0 && (
-                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                          {heldSalesCount}
-                        </span>
-                      )}
-                    </button>
-            {/* End hold sales button */}
+            
+            {/* Hold Sales Button */}
+            <button
+              onClick={() => setShowHoldSales(true)}
+              className="relative bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-700 transition flex items-center gap-2 mb-4 w-full justify-center"
+            >
+              <FiClock className="text-sm" />
+              Held Sales
+              {heldSalesCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {heldSalesCount}
+                </span>
+              )}
+            </button>
+            
             {cart.items.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 Cart is empty
@@ -451,22 +432,7 @@ const POS = () => {
                     </button>
                     
                     <button
-                      onClick={() => setShowHoldSales(true)}
-                      className="relative bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-700 transition flex items-center gap-2"
-                    >
-                      <FiClock className="text-sm" />
-                      {heldSalesCount > 0 && (
-                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                          {heldSalesCount}
-                        </span>
-                      )}
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        dispatch(clearCart());
-                        toast.success('Cart cleared');
-                      }}
+                      onClick={() => dispatch(clearCart())}
                       className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition"
                     >
                       Clear
