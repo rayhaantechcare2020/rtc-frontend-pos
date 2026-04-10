@@ -55,7 +55,7 @@ const fetchCategories = async () => {
     try {
       setLoading(true);
       const response = await categoryService.getCategories();
-     // console.log('Categories response:', response);
+     console.log('Categories response:', response);
       
       let categoriesData = [];
       if (response?.data) {
@@ -78,7 +78,8 @@ const fetchCategories = async () => {
   const fetchProduct = async () => {
     try {
       setFetching(true);
-      const response = await productService.getProduct(id);
+      //const response = await productService.getProduct(id);
+      const response = await productService.getProduct();
       console.log('Product data:', response);
       
       // Handle response structure

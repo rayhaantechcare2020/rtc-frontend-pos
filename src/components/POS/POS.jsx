@@ -120,7 +120,7 @@ const POS = () => {
         }
       }
       
-      setCategories(categoriesData);
+      setSelectedCategory(categoriesData);
     } catch (error) {
       console.error('Error fetching categories:', error);
       toast.error('Failed to load categories');
