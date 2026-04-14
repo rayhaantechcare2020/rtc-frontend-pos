@@ -28,7 +28,8 @@ async createPayment(paymentData) {
       amount: paymentData.amount,
       method: paymentData.method,
       reference: paymentData.reference || '',
-      date: paymentData.date,        // This will be mapped to payment_date in controller
+      date: paymentData.date,   
+      bank_id : paymentData.bank_id,     // This will be mapped to payment_date in controller
       sale_id: paymentData.sale_id || null,
       notes: paymentData.notes || ''
     });

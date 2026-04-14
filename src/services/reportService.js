@@ -113,6 +113,7 @@ export const reportService = {
       if (params.page) queryParams.append('page', params.page);
       
       const response = await api.get(`/reports/bank-transactions?${queryParams}`);
+      //const response = await api.get(`/reports/bankcreditsalestransaction?${queryParams}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching bank transaction report:', error);

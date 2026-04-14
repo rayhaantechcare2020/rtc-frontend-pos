@@ -12,7 +12,9 @@ import {
   FiUpload,
   FiInfo,
   FiPlus,
-  FiTrash2
+  FiTrash2,
+  FiEye,
+  FiEyeOff
 } from 'react-icons/fi';
 import { saleService } from '../../services/sale';
 import { customerService } from '../../services/customer';
@@ -30,6 +32,7 @@ const Checkout = ({ cart, onClose, onComplete }) => {
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
   const [defaultCustomerWasSet, setDefaultCustomerWasSet] = useState(false);
   const [isCreditOnly, setIsCreditOnly] = useState(false);
+  const [showPrices, setShowPrices] = useState(true); // NEW: Toggle for showing/hiding prices on receipt
   const [printerSettings, setPrinterSettings] = useState({
     default_printer_type: 'thermal',
     thermal_width: '80mm',
@@ -69,6 +72,55 @@ const Checkout = ({ cart, onClose, onComplete }) => {
   const totalPaid = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
   const changeDue = Math.max(0, totalPaid - finalTotal);
   const balanceDue = Math.max(0, finalTotal - totalPaid);
+
+  // Display receipt with price visibility preference
+  const displayReceipt = async (saleId) => {
+    try {
+      setPrinting(true);
+      
+      const receiptType = printerSettings.default_printer_type;
+      const copies = printerSettings.print_copies || 1;
+      const autoPrint = printerSettings.auto_print;
+      
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        toast.error('You must be logged in');
+        return;
+      }
+      
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      
+      const typesToPrint = receiptType === 'both' ? ['thermal', 'pdf'] : [receiptType];
+      
+      let requestIndex = 0;
+      for (const type of typesToPrint) {
+        for (let i = 0; i < copies; i++) {
+          setTimeout(() => {
+            const encodedToken = encodeURIComponent(token);
+            // Add show_prices parameter to the URL
+            const url = `${baseUrl}/pos/receipt/${saleId}/print?type=${type}&action=display&autoprint=${autoPrint}&show_prices=${showPrices}&token=${encodedToken}&copies=${copies}`;
+            
+            const printWindow = window.open(url, '_blank', 'width=800,height=600,scrollbars=yes');
+            
+            if (printWindow) {
+              printWindow.focus();
+            } else {
+              toast.error('Please allow popups for this site');
+            }
+          }, requestIndex * 500);
+          requestIndex += 1;
+        }
+      }
+      
+      toast.success('Receipt window opened');
+    } catch (error) {
+      console.error('Error displaying receipt:', error);
+      toast.error('Failed to display receipt');
+    } finally {
+      setPrinting(false);
+    }
+  };
 
   // Load customers, banks, and printer settings on mount
   useEffect(() => {
@@ -199,52 +251,12 @@ const Checkout = ({ cart, onClose, onComplete }) => {
     }
   };
 
-  const displayReceipt = async (saleId) => {
-    try {
-      setPrinting(true);
-      
-      const receiptType = printerSettings.default_printer_type || 'thermal';
-      const copies = Math.max(1, Number(printerSettings.print_copies) || 1);
-      const autoPrint = printerSettings.auto_print;
-      
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        toast.error('You must be logged in');
-        return;
-      }
-      
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-      const typesToPrint = receiptType === 'both' ? ['thermal', 'pdf'] : [receiptType];
-
-      for (const type of typesToPrint) {
-        for (let i = 0; i < copies; i++) {
-          const encodedToken = encodeURIComponent(token);
-          const url = `${baseUrl}/pos/receipt/${saleId}/print?type=${type}&action=display&autoprint=${autoPrint}&token=${encodedToken}`;
-          
-          const printWindow = window.open(url, '_blank', 'width=800,height=600,scrollbars=yes');
-          
-          if (!printWindow) {
-            toast.error('Please allow popups for this site');
-          }
-        }
-      }
-      
-      toast.success('Receipt window opened');
-    } catch (error) {
-      console.error('Error displaying receipt:', error);
-      toast.error('Failed to display receipt');
-    } finally {
-      setPrinting(false);
-    }
-  };
-  
   // Handle credit payment - Full credit sale
   const handleCreditPayment = () => {
     // Clear all existing payments and set credit with full amount
     setPayments([{ 
       method: 'credit', 
-      amount: finalTotal,  // Set amount to total for credit sale
+      amount: finalTotal,
       bank_id: null, 
       transaction_reference: null, 
       deposit_slip: null 
@@ -350,7 +362,6 @@ const Checkout = ({ cart, onClose, onComplete }) => {
           toast.error(`Please select a bank for payment method ${i + 1}`);
           return;
         }
-        // Transaction reference is optional
       }
     }
 
@@ -383,7 +394,8 @@ const Checkout = ({ cart, onClose, onComplete }) => {
         discount: discountAmount,
         notes: notes || '',
         total: parseFloat(finalTotal),
-        payments: validPayments
+        payments: validPayments,
+        show_prices: showPrices // Pass the price visibility preference to backend
       };
 
       console.log('Checkout data:', checkoutData);
@@ -415,7 +427,7 @@ const Checkout = ({ cart, onClose, onComplete }) => {
   // Determine if the Complete button should be disabled
   const isSubmitDisabled = () => {
     if (loading) return true;
-    if (isCreditOnly) return false; // Credit-only sales can be completed with 0 payment
+    if (isCreditOnly) return false;
     return totalPaid < finalTotal;
   };
 
@@ -431,12 +443,33 @@ const Checkout = ({ cart, onClose, onComplete }) => {
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Checkout</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <FiX size={24} />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* PRICE TOGGLE BUTTON */}
+            <button
+              type="button"
+              onClick={() => setShowPrices(!showPrices)}
+              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg border hover:bg-gray-50 transition flex items-center gap-1"
+              title={showPrices ? "Hide prices on receipt" : "Show prices on receipt"}
+            >
+              {showPrices ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+              <span className="text-xs hidden sm:inline">
+                {showPrices ? 'Hide' : 'Show'}
+              </span>
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <FiX size={24} />
+            </button>
+          </div>
+        </div>
+
+        {/* Price Status Indicator */}
+        <div className="mb-3 text-center">
+          <span className={`text-xs px-2 py-1 rounded-full ${showPrices ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+            {showPrices ? '💰 Prices visible on receipt' : '🙈 Prices hidden on receipt'}
+          </span>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -447,42 +480,55 @@ const Checkout = ({ cart, onClose, onComplete }) => {
               {cart.items.map(item => (
                 <div key={item.product_id} className="flex justify-between">
                   <span>{item.name} x{item.quantity}</span>
-                  <span>₦{(item.price * item.quantity).toLocaleString()}</span>
+                  {showPrices ? (
+                    <span>₦{(item.price * item.quantity).toLocaleString()}</span>
+                  ) : (
+                    <span className="text-gray-400">****</span>
+                  )}
                 </div>
               ))}
             </div>
             
-            <div className="border-t pt-2 mt-2 space-y-1">
-              <div className="flex justify-between text-sm">
-                <span>Subtotal:</span>
-                <span>₦{subtotal.toLocaleString()}</span>
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-sm">Discount (%):</span>
-                <input
-                  type="number"
-                  value={discount}
-                  onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
-                  min="0"
-                  max="100"
-                  step="1"
-                  className="w-20 px-2 py-1 text-right border rounded text-sm"
-                />
-              </div>
-              
-              {discount > 0 && (
-                <div className="flex justify-between text-sm text-green-600">
-                  <span>Discount Amount:</span>
-                  <span>-₦{discountAmount.toLocaleString()}</span>
+            {showPrices && (
+              <div className="border-t pt-2 mt-2 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>Subtotal:</span>
+                  <span>₦{subtotal.toLocaleString()}</span>
                 </div>
-              )}
-              
-              <div className="flex justify-between font-bold pt-1 border-t">
-                <span>Total:</span>
-                <span className="text-blue-600">₦{finalTotal.toLocaleString()}</span>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm">Discount (%):</span>
+                  <input
+                    type="number"
+                    value={discount}
+                    onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                    min="0"
+                    max="100"
+                    step="1"
+                    className="w-20 px-2 py-1 text-right border rounded text-sm"
+                  />
+                </div>
+                
+                {discount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Discount Amount:</span>
+                    <span>-₦{discountAmount.toLocaleString()}</span>
+                  </div>
+                )}
+                
+                <div className="flex justify-between font-bold pt-1 border-t">
+                  <span>Total:</span>
+                  <span className="text-blue-600">₦{finalTotal.toLocaleString()}</span>
+                </div>
               </div>
-            </div>
+            )}
+            
+            {!showPrices && (
+              <div className="border-t pt-2 mt-2 text-center text-gray-500 text-sm">
+                <p>Total amount hidden</p>
+                <p className="text-xs">Click 👁️ to show prices</p>
+              </div>
+            )}
           </div>
 
           {/* Customer Selection */}
@@ -734,7 +780,7 @@ const Checkout = ({ cart, onClose, onComplete }) => {
                       </div>
                       
                       {/* Deposit Slip Upload */}
-                      <div className="mt-2">
+                      {/* <div className="mt-2">
                         <label className="block text-xs font-medium mb-1">Deposit Slip (Optional)</label>
                         <div className="flex items-center gap-2">
                           <input
@@ -748,7 +794,7 @@ const Checkout = ({ cart, onClose, onComplete }) => {
                         {payment.deposit_slip && (
                           <p className="text-xs text-green-600 mt-1">✓ File uploaded: {payment.deposit_slip.name}</p>
                         )}
-                      </div>
+                      </div> */}
                       
                       {/* Display selected bank info */}
                       {payment.bank_id && banks.find(b => b.id == payment.bank_id) && (
@@ -772,7 +818,7 @@ const Checkout = ({ cart, onClose, onComplete }) => {
                 <span>Total Amount:</span>
                 <span className="font-bold">₦{finalTotal.toLocaleString()}</span>
               </div>
-              {!isCreditOnly && (
+              {!isCreditOnly && showPrices && (
                 <>
                   <div className="flex justify-between">
                     <span>Total Paid:</span>
@@ -814,6 +860,11 @@ const Checkout = ({ cart, onClose, onComplete }) => {
                 <div className="flex justify-between text-purple-600">
                   <span>Credit Sale:</span>
                   <span className="font-bold">₦{finalTotal.toLocaleString()} will be added to customer balance</span>
+                </div>
+              )}
+              {!showPrices && !isCreditOnly && (
+                <div className="text-center text-gray-500 text-sm mt-2">
+                  Amount details hidden
                 </div>
               )}
             </div>

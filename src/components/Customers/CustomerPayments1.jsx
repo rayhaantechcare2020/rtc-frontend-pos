@@ -12,9 +12,7 @@ import {
   FiDownload,
   FiSmartphone,
   FiBriefcase,
-  FiChevronDown,
-  FiPlusCircle,
-  FiTrash2
+  FiChevronDown
 } from 'react-icons/fi';
 import { customerService } from '../../services/customer';
 import { paymentService } from '../../services/payment';
@@ -32,10 +30,6 @@ const CustomerPayments = () => {
   const [banks, setBanks] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSaleSelector, setShowSaleSelector] = useState(false);
-  const [isSplitPayment, setIsSplitPayment] = useState(false);
-  const [splitComponents, setSplitComponents] = useState([
-    { method: 'cash', amount: '', bank_id: '', reference: '' }
-  ]);
   const [selectedBank, setSelectedBank] = useState('');
   const [isBankDropdownOpen, setIsBankDropdownOpen] = useState(false);
   const [paymentData, setPaymentData] = useState({
@@ -58,7 +52,7 @@ const CustomerPayments = () => {
       const response = await customerService.getCustomer(id);
       if (response.success) {
         setCustomer(response.data);
-        fetchCustomerSales();
+        fetchCustomerSales(); // Fetch sales after we have customer
       }
     } catch (error) {
       console.error('Error fetching customer:', error);
@@ -79,6 +73,18 @@ const CustomerPayments = () => {
     }
   };
 
+  // const fetchBanks = async () => {
+  //   try {
+  //     const response = await bankService.getBanks();
+  //     if (response.success) {
+  //       setBanks(response.data || []);
+  //     }
+  //   } catch (error) {
+  //     console.error('Error fetching banks:', error);
+  //   }
+  // };
+
+  
   const fetchBanks = async () => {
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -106,6 +112,7 @@ const CustomerPayments = () => {
       });
       
       if (response.success) {
+        // Filter to only show sales with balance > 0
         const salesWithBalance = (response.data.data || []).filter(sale => 
           sale.balance_due > 0 || sale.payment_status !== 'paid'
         );
@@ -116,153 +123,37 @@ const CustomerPayments = () => {
     }
   };
 
-  // Add split component
-  const addSplitComponent = () => {
-    if (splitComponents.length >= 5) {
-      toast.error('Maximum 5 split payment methods allowed');
-      return;
-    }
-    setSplitComponents([
-      ...splitComponents,
-      { method: 'cash', amount: '', bank_id: '', reference: '' }
-    ]);
-  };
-
-  // Remove split component
-  const removeSplitComponent = (index) => {
-    if (splitComponents.length === 1) {
-      toast.error('At least one payment method is required');
-      return;
-    }
-    const newComponents = splitComponents.filter((_, i) => i !== index);
-    setSplitComponents(newComponents);
-  };
-
-  // Update split component
-  const updateSplitComponent = (index, field, value) => {
-    const newComponents = [...splitComponents];
-    newComponents[index][field] = value;
-    
-    if (field === 'method' && value !== 'bank') {
-      newComponents[index].bank_id = '';
-    }
-    
-    setSplitComponents(newComponents);
-    
-    // Update total amount
-    const total = calculateSplitTotal();
-    setPaymentData({ ...paymentData, amount: total.toString() });
-  };
-
-  // Calculate total from split components
-  const calculateSplitTotal = () => {
-    return splitComponents.reduce((sum, comp) => sum + (parseFloat(comp.amount) || 0), 0);
-  };
-
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     
-    if (isSplitPayment) {
-      // Validate split payment
-      const totalAmount = calculateSplitTotal();
-      
-      if (totalAmount <= 0) {
-        toast.error('Please enter valid amounts for payment methods');
+    if (!paymentData.amount || paymentData.amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    // For transfer payments, bank selection is required
+    if (paymentData.method === 'bank' && !selectedBank) {
+      toast.error('Please select a bank for transfer payment');
+      return;
+    }
+
+    // Build reference with bank info for transfers
+    let reference = paymentData.reference;
+    if (paymentData.method === 'bank' && selectedBank) {
+      const bankName = banks.find(b => b.id === parseInt(selectedBank))?.name || '';
+      reference = reference ? `${reference} (${bankName})` : bankName;
+    }
+
+    if (paymentData.sale_id && paymentData.amount > 0) {
+      const selectedSale = customerSales.find(s => s.id === parseInt(paymentData.sale_id));
+      if (selectedSale && paymentData.amount > selectedSale.balance_due) {
+        toast.error(`Amount exceeds balance due (N${selectedSale.balance_due.toLocaleString()})`);
         return;
       }
-      
-      // Validate each component
-      for (let i = 0; i < splitComponents.length; i++) {
-        const comp = splitComponents[i];
-        if (!comp.amount || parseFloat(comp.amount) <= 0) {
-          toast.error(`Please enter amount for payment method ${i + 1}`);
-          return;
-        }
-        
-        if (comp.method === 'bank' && !comp.bank_id) {
-          toast.error(`Please select bank for transfer payment ${i + 1}`);
-          return;
-        }
-      }
-      
-      // Validate against sale balance if applicable
-      if (paymentData.sale_id) {
-        const selectedSale = customerSales.find(s => s.id === parseInt(paymentData.sale_id));
-        if (selectedSale && totalAmount > selectedSale.balance_due) {
-          toast.error(`Total amount exceeds balance due (₦${selectedSale.balance_due.toLocaleString()})`);
-          return;
-        }
-      }
-      
-      // Prepare split payment data
-      const splitComponentsData = splitComponents.map(comp => ({
-        method: comp.method,
-        amount: parseFloat(comp.amount),
-        bank_id: comp.method === 'bank' ? parseInt(comp.bank_id) : null,
-        reference: comp.reference || null
-      }));
-      
-      const paymentPayload = {
-        customer_id: parseInt(id),
-        amount: totalAmount,
-        method: 'split',
-        reference: paymentData.reference,
-        date: paymentData.date,
-        sale_id: paymentData.sale_id ? parseInt(paymentData.sale_id) : null,
-        notes: paymentData.notes,
-        is_split_payment: true,
-        split_components: splitComponentsData
-      };
-      
-      try {
-        const response = await paymentService.createPayment(paymentPayload);
-        if (response.success) {
-          toast.success('Split payment recorded successfully');
-          setShowPaymentModal(false);
-          resetPaymentForm();
-          fetchCustomerData();
-          fetchPayments();
-          fetchCustomerSales();
-        }
-      } catch (error) {
-        console.error('Error recording split payment:', error);
-        if (error.response?.data?.errors) {
-          const errors = error.response.data.errors;
-          Object.keys(errors).forEach(key => {
-            toast.error(`${key}: ${errors[key][0]}`);
-          });
-        } else {
-          toast.error(error.response?.data?.message || 'Failed to record split payment');
-        }
-      }
-      
-    } else {
-      // Regular single payment validation
-      if (!paymentData.amount || paymentData.amount <= 0) {
-        toast.error('Please enter a valid amount');
-        return;
-      }
+    }
 
-      if (paymentData.method === 'bank' && !selectedBank) {
-        toast.error('Please select a bank for transfer payment');
-        return;
-      }
-
-      let reference = paymentData.reference;
-      if (paymentData.method === 'bank' && selectedBank) {
-        const bankName = banks.find(b => b.id === parseInt(selectedBank))?.name || '';
-        reference = reference ? `${reference} (${bankName})` : bankName;
-      }
-
-      if (paymentData.sale_id && paymentData.amount > 0) {
-        const selectedSale = customerSales.find(s => s.id === parseInt(paymentData.sale_id));
-        if (selectedSale && paymentData.amount > selectedSale.balance_due) {
-          toast.error(`Amount exceeds balance due (₦${selectedSale.balance_due.toLocaleString()})`);
-          return;
-        }
-      }
-
-      const paymentPayload = {
+    try {
+      const response = await paymentService.createPayment({
         customer_id: parseInt(id),
         amount: parseFloat(paymentData.amount),
         method: paymentData.method,
@@ -270,24 +161,20 @@ const CustomerPayments = () => {
         reference: reference,
         date: paymentData.date,
         sale_id: paymentData.sale_id ? parseInt(paymentData.sale_id) : null,
-        notes: paymentData.notes,
-        is_split_payment: false
-      };
+        notes: paymentData.notes
+      });
 
-      try {
-        const response = await paymentService.createPayment(paymentPayload);
-        if (response.success) {
-          toast.success('Payment recorded successfully');
-          setShowPaymentModal(false);
-          resetPaymentForm();
-          fetchCustomerData();
-          fetchPayments();
-          fetchCustomerSales();
-        }
-      } catch (error) {
-        console.error('Error recording payment:', error);
-        toast.error(error.response?.data?.message || 'Failed to record payment');
+      if (response.success) {
+        toast.success('Payment recorded successfully');
+        setShowPaymentModal(false);
+        resetPaymentForm();
+        fetchCustomerData();
+        fetchPayments();
+        fetchCustomerSales();
       }
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      toast.error(error.response?.data?.message || 'Failed to record payment');
     }
   };
 
@@ -302,10 +189,6 @@ const CustomerPayments = () => {
     });
     setSelectedBank('');
     setShowSaleSelector(false);
-    setIsSplitPayment(false);
-    setSplitComponents([
-      { method: 'cash', amount: '', bank_id: '', reference: '' }
-    ]);
   };
 
   const handleDeletePayment = async (paymentId, amount) => {
@@ -363,7 +246,6 @@ const CustomerPayments = () => {
       case 'pos': return '💳';
       case 'cheque': return '📝';
       case 'credit': return '💳';
-      case 'split': return '🔀';
       default: return '💰';
     }
   };
@@ -375,7 +257,6 @@ const CustomerPayments = () => {
       case 'pos': return <FiCreditCard />;
       case 'cheque': return <FiBriefcase />;
       case 'credit': return <FiCreditCard />;
-      case 'split': return <FiPlusCircle />;
       default: return <FiDollarSign />;
     }
   };
@@ -536,11 +417,8 @@ const CustomerPayments = () => {
                     </td>
                     <td className="px-6 py-4">
                       <span className="flex items-center gap-1 capitalize">
-                        <span>{getMethodIcon(payment.payment_method || payment.method)}</span>
-                        {payment.payment_method || payment.method}
-                        {payment.is_split_payment && (
-                          <span className="ml-1 text-xs bg-purple-100 text-purple-800 px-1 rounded">Split</span>
-                        )}
+                        <span>{getMethodIcon(payment.payment_method)}</span>
+                        {payment.payment_method}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-green-600">
@@ -560,7 +438,7 @@ const CustomerPayments = () => {
                       {payment.notes || '-'}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {payment.status === 'completed' && !payment.is_split_payment && (
+                      {payment.status === 'completed' && (
                         <>
                           <button
                             onClick={() => handleReversePayment(payment.id, payment.amount)}
@@ -568,7 +446,7 @@ const CustomerPayments = () => {
                             title="Reverse Payment"
                           >
                             ↩️
-                          </button>
+          </button>
                           <button
                             onClick={() => handleDeletePayment(payment.id, payment.amount)}
                             className="text-red-600 hover:text-red-800"
@@ -577,18 +455,6 @@ const CustomerPayments = () => {
                             <FiX size={18} />
                           </button>
                         </>
-                      )}
-                      {payment.is_split_payment && payment.split_components && (
-                        <button
-                          onClick={() => {
-                            // View split payment details
-                            toast.info(`Split payment with ${payment.split_components?.length || 0} methods`);
-                          }}
-                          className="text-blue-600 hover:text-blue-800"
-                          title="View Split Details"
-                        >
-                          <FiEye size={16} />
-                        </button>
                       )}
                     </td>
                   </tr>
@@ -608,10 +474,10 @@ const CustomerPayments = () => {
         )}
       </div>
 
-      {/* Payment Modal with Split Payment Support */}
+      {/* Payment Modal */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Record Payment</h2>
               <button
@@ -625,29 +491,22 @@ const CustomerPayments = () => {
               </button>
             </div>
 
-            {/* Split Payment Toggle */}
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isSplitPayment}
-                  onChange={(e) => {
-                    setIsSplitPayment(e.target.checked);
-                    if (!e.target.checked) {
-                      setSplitComponents([{ method: 'cash', amount: '', bank_id: '', reference: '' }]);
-                      setPaymentData({ ...paymentData, amount: '' });
-                    }
-                  }}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="font-medium">Split Payment (Use multiple payment methods)</span>
-              </label>
-              <p className="text-xs text-gray-500 mt-1">
-                Enable this to split payment across multiple methods (e.g., Cash + Bank Transfer)
-              </p>
-            </div>
-
             <form onSubmit={handlePaymentSubmit} className="space-y-4">
+              {/* Amount */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Amount (₦) *</label>
+                <input
+                  type="number"
+                  value={paymentData.amount}
+                  onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter amount"
+                  min="0"
+                  step="100"
+                  required
+                />
+              </div>
+
               {/* Sale Selection */}
               <div>
                 <label className="block text-sm font-medium mb-2">Apply to Sale (Optional)</label>
@@ -663,184 +522,73 @@ const CustomerPayments = () => {
                     </option>
                   ))}
                 </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select a sale to apply this payment to a specific invoice
+                </p>
               </div>
 
-              {!isSplitPayment ? (
-                // Regular Single Payment Form
-                <>
-                  {/* Amount */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Amount (₦) *</label>
-                    <input
-                      type="number"
-                      value={paymentData.amount}
-                      onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter amount"
-                      min="0"
-                      step="100"
-                      required
-                    />
-                  </div>
+              {/* Payment Method */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Payment Method *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['cash', 'bank', 'pos', 'cheque', 'credit'].map((method) => (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => {
+                        setPaymentData({...paymentData, method});
+                        if (method !== 'bank') {
+                          setSelectedBank('');
+                        }
+                      }}
+                      className={`p-2 border rounded-lg flex items-center justify-center gap-2 capitalize ${
+                        paymentData.method === method
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      {getPaymentIcon(method)}
+                      {method}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                  {/* Payment Method */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Payment Method *</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {['cash', 'bank', 'pos', 'cheque', 'credit'].map((method) => (
-                        <button
-                          key={method}
-                          type="button"
-                          onClick={() => {
-                            setPaymentData({...paymentData, method});
-                            if (method !== 'bank') {
-                              setSelectedBank('');
-                            }
-                          }}
-                          className={`p-2 border rounded-lg flex items-center justify-center gap-2 capitalize ${
-                            paymentData.method === method
-                              ? 'bg-blue-600 text-white border-blue-600'
-                              : 'hover:bg-gray-50'
-                          }`}
-                        >
-                          {getPaymentIcon(method)}
-                          {method}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Bank Selection */}
-                  {paymentData.method === 'bank' && (
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Select Bank *</label>
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setIsBankDropdownOpen(!isBankDropdownOpen)}
-                          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between"
-                        >
-                          <span className={!selectedBank ? 'text-gray-500' : ''}>
-                            {selectedBank ? banks.find(b => b.id === parseInt(selectedBank))?.name : 'Select Bank'}
-                          </span>
-                          <FiChevronDown className={`transition-transform ${isBankDropdownOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                        
-                        {isBankDropdownOpen && (
-                          <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                            {banks.map(bank => (
-                              <button
-                                key={bank.id}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedBank(bank.id.toString());
-                                  setIsBankDropdownOpen(false);
-                                }}
-                                className="w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors"
-                              >
-                                {bank.name}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                // Split Payment Form
-                <>
-                  <div className="border rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <label className="block text-sm font-medium">Payment Breakdown *</label>
-                      <button
-                        type="button"
-                        onClick={addSplitComponent}
-                        className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1"
-                      >
-                        <FiPlusCircle size={14} /> Add Method
-                      </button>
-                    </div>
+              {/* Bank Selection (only for transfer) */}
+              {paymentData.method === 'bank' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Select Bank *</label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsBankDropdownOpen(!isBankDropdownOpen)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between"
+                    >
+                      <span className={!selectedBank ? 'text-gray-500' : ''}>
+                        {selectedBank ? banks.find(b => b.id === parseInt(selectedBank))?.name : 'Select Bank'}
+                      </span>
+                      <FiChevronDown className={`transition-transform ${isBankDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
                     
-                    {splitComponents.map((component, index) => (
-                      <div key={index} className="border-b last:border-b-0 pb-3 mb-3 last:pb-0 last:mb-0">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-sm font-medium text-gray-600">Method {index + 1}</span>
-                          {splitComponents.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeSplitComponent(index)}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              <FiTrash2 size={16} />
-                            </button>
-                          )}
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <select
-                              value={component.method}
-                              onChange={(e) => updateSplitComponent(index, 'method', e.target.value)}
-                              className="w-full px-2 py-1 border rounded text-sm"
-                            >
-                              <option value="cash">Cash</option>
-                              <option value="bank">Bank Transfer</option>
-                              <option value="pos">POS</option>
-                              <option value="cheque">Cheque</option>
-                              <option value="credit">Credit</option>
-                            </select>
-                          </div>
-                          <div>
-                            <input
-                              type="number"
-                              placeholder="Amount"
-                              value={component.amount}
-                              onChange={(e) => updateSplitComponent(index, 'amount', e.target.value)}
-                              className="w-full px-2 py-1 border rounded text-sm"
-                              min="0"
-                              step="100"
-                            />
-                          </div>
-                        </div>
-                        
-                        {component.method === 'bank' && (
-                          <div className="mt-2">
-                            <select
-                              value={component.bank_id}
-                              onChange={(e) => updateSplitComponent(index, 'bank_id', e.target.value)}
-                              className="w-full px-2 py-1 border rounded text-sm"
-                            >
-                              <option value="">Select Bank</option>
-                              {banks.map(bank => (
-                                <option key={bank.id} value={bank.id}>{bank.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                        
-                        <div className="mt-2">
-                          <input
-                            type="text"
-                            placeholder="Reference (optional)"
-                            value={component.reference}
-                            onChange={(e) => updateSplitComponent(index, 'reference', e.target.value)}
-                            className="w-full px-2 py-1 border rounded text-sm"
-                          />
-                        </div>
+                    {isBankDropdownOpen && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {banks.map(bank => (
+                          <button
+                            key={bank.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedBank(bank.id.toString());
+                              setIsBankDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors"
+                          >
+                            {bank.name}
+                          </button>
+                        ))}
                       </div>
-                    ))}
-                    
-                    <div className="mt-3 pt-3 border-t">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">Total Amount:</span>
-                        <span className="text-lg font-bold text-green-600">
-                          {formatCurrency(calculateSplitTotal())}
-                        </span>
-                      </div>
-                    </div>
+                    )}
                   </div>
-                </>
+                </div>
               )}
 
               {/* Reference */}
@@ -853,6 +601,11 @@ const CustomerPayments = () => {
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Transaction reference"
                 />
+                {paymentData.method === 'bank' && selectedBank && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Bank: {banks.find(b => b.id === parseInt(selectedBank))?.name}
+                  </p>
+                )}
               </div>
 
               {/* Date */}
@@ -911,7 +664,7 @@ const CustomerPayments = () => {
                   type="submit"
                   className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
                 >
-                  {isSplitPayment ? 'Record Split Payment' : 'Record Payment'}
+                  Record Payment
                 </button>
               </div>
             </form>
