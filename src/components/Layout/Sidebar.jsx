@@ -22,7 +22,7 @@ import {
   FiShield,
   FiDollarSign,  // Add this for payments
   FiCreditCard,
-  FiCheckCircle   // Add this for payment methods
+  FiCheckCircle  // Add this for payment methods
 } from 'react-icons/fi';
 
 const Sidebar = () => {
@@ -153,6 +153,7 @@ const Sidebar = () => {
         { path: '/reports/cashier-sales', icon: FiDollarSign, label: 'Cashier Sales', roles: ['admin', 'manager'] }, // Add cashier sales report
        { path: '/reports/end-of-day', icon: FiCheckCircle, label: 'End of Day', roles: ['admin', 'manager'] },
        {path: '/reports/bank-transactions', icon: FiCreditCard, label: 'Bank Transactions', roles: ['admin', 'manager'] },
+       {path: '/reports/sales-by-item', icon: FiBarChart2, label: 'Daily Sales by Item', roles: ['admin', 'manager'] },
        
       ]
     },

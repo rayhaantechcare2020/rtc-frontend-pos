@@ -346,7 +346,7 @@ const SalesHistory = () => {
                           title="Print A4 Receipt"
                           disabled={printing}
                         >
-                          <FiDownload />
+                          
                         </button>
                         <Link
                           to={`/sales/${sale.id}`}

@@ -29,5 +29,12 @@ export const productService = {
   async deleteProduct(id) {
     const response = await api.delete(`/products/${id}`);
     return response.data;
-  }
+  },
+ async updateStock(id, quantity, type) {
+    const response = await api.patch(`/products/${id}/stock`, { 
+        quantity: quantity,
+        type: type  // 'add', 'subtract', or 'set'
+    });
+    return response.data;
+}
 };

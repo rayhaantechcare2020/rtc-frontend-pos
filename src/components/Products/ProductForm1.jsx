@@ -2,15 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FiSave, FiX } from 'react-icons/fi';
 import { productService } from '../../services/products';
-import { categoryService } from '../../services/category';
+import {categoryService} from '../../services/category';
 import toast from 'react-hot-toast';
 
 const ProductForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -35,11 +34,28 @@ const ProductForm = () => {
     }
   }, [id]);
 
-  const fetchCategories = async () => {
+  // const fetchCategories = async () => {
+  //   try {
+  //     const response = await fetch('http://localhost:8000/api/categories', {
+  //       headers: {
+  //         'Authorization': `Bearer ${localStorage.getItem('token')}`,
+  //         'Accept': 'application/json'
+  //       }
+  //     });
+  //     const data = await response.json();
+  //     if (data.success) {
+  //       setCategories(data.data || []);
+  //     }
+  //   } catch (error) {
+  //     console.error('Error fetching categories:', error);
+  //   }
+  // };
+
+const fetchCategories = async () => {
     try {
-      setCategoriesLoading(true);
+      setLoading(true);
       const response = await categoryService.getCategories();
-      console.log('Categories response:', response);
+     console.log('Categories response:', response);
       
       let categoriesData = [];
       if (response?.data) {
@@ -55,15 +71,15 @@ const ProductForm = () => {
       console.error('Error fetching categories:', error);
       toast.error('Failed to load categories');
     } finally {
-      setCategoriesLoading(false);
+      setLoading(false);
     }
   };
 
   const fetchProduct = async () => {
     try {
       setFetching(true);
-      // FIXED: Added the id parameter
       const response = await productService.getProduct(id);
+      //const response = await productService.getProduct();
       console.log('Product data:', response);
       
       // Handle response structure
@@ -99,12 +115,12 @@ const ProductForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    setLoading(true);
 
     // Validate required fields
     if (!formData.name || !formData.price) {
       toast.error('Name and price are required');
-      setSubmitting(false);
+      setLoading(false);
       return;
     }
 
@@ -130,7 +146,7 @@ const ProductForm = () => {
         toast.success('Product created successfully');
       }
 
-      console.log('Save response:', response);
+      //console.log('Save response:', response);
       navigate('/products');
       
     } catch (error) {
@@ -146,7 +162,7 @@ const ProductForm = () => {
         toast.error(error.response?.data?.message || 'Failed to save product');
       }
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
@@ -264,15 +280,10 @@ const ProductForm = () => {
               value={formData.category_id}
               onChange={handleChange}
               className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={categoriesLoading}
             >
-              <option value="">
-                {categoriesLoading ? 'Loading categories...' : 'Select Category'}
-              </option>
+              <option value="">Select Category</option>
               {categories.map(category => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
+                <option key={category.id} value={category.id}>{category.name}</option>
               ))}
             </select>
           </div>
@@ -331,10 +342,10 @@ const ProductForm = () => {
           </button>
           <button
             type="submit"
-            disabled={submitting}
+            disabled={loading}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50 transition"
           >
-            <FiSave /> {submitting ? 'Saving...' : (id ? 'Update Product' : 'Save Product')}
+            <FiSave /> {loading ? 'Saving...' : (id ? 'Update Product' : 'Save Product')}
           </button>
         </div>
       </form>

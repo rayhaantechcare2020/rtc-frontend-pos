@@ -5,7 +5,7 @@ import { addToCart, removeFromCart, updateQuantity, clearCart } from '../../stor
 import { productService } from '../../services/products';
 import { saleService } from '../../services/sale';
 import { holdSaleService } from '../../services/holdSaleService';
-import { categoryService } from '../../services/category'; // ✅ ADD THIS IMPORT
+import { categoryService } from '../../services/category';
 import toast from 'react-hot-toast';
 
 // Lazy load checkout and holdsales modal components
@@ -25,6 +25,7 @@ const POS = () => {
   const [showHoldSales, setShowHoldSales] = useState(false);
   const [holdingSale, setHoldingSale] = useState(false);
   const [heldSalesCount, setHeldSalesCount] = useState(0);
+  const [quantityInputs, setQuantityInputs] = useState({});
   
   const dispatch = useDispatch();
   const cart = useSelector((state) => state.cart);
@@ -119,9 +120,8 @@ const POS = () => {
     }
   };
 
-  // Handle hold sale
   const handleHoldSale = async () => {
-    if (cart.items.length === 0) {
+    if (!cart.items || cart.items.length === 0) {
       toast.error('Cart is empty. Nothing to hold.');
       return;
     }
@@ -138,28 +138,24 @@ const POS = () => {
             quantity: item.quantity,
             stock: item.stock
           })),
-          subtotal: cart.subtotal,
+          subtotal: cart.subtotal || 0,
           discount: cart.discount || 0,
-          total: cart.total
+          total: cart.total || 0
         },
         customer_id: selectedCustomer?.id || null,
         customer_name: selectedCustomer?.name || 'Walk-in Customer',
         customer_phone: selectedCustomer?.phone || '',
         notes: notes || '',
-        expires_in_hours: 24 // Hold for 24 hours
+        expires_in_hours: 24
       };
       
       const response = await holdSaleService.holdSale(cartData);
       
       if (response.success) {
         toast.success(`Sale held successfully! Reference: ${response.data.hold_reference}`);
-        
-        // Clear cart
         dispatch(clearCart());
         setSelectedCustomer(null);
         setNotes('');
-        
-        // Refresh held sales count
         fetchHeldSalesCount();
       }
     } catch (error) {
@@ -170,9 +166,7 @@ const POS = () => {
     }
   };
 
-  // Handle restore from held sale
   const handleRestoreHeldSale = (restoredData) => {
-    // Restore cart items
     if (restoredData.cart && restoredData.cart.items) {
       restoredData.cart.items.forEach(item => {
         dispatch(addToCart({
@@ -185,12 +179,10 @@ const POS = () => {
       });
     }
     
-    // Restore customer
     if (restoredData.customer) {
       setSelectedCustomer(restoredData.customer);
     }
     
-    // Restore notes
     if (restoredData.notes) {
       setNotes(restoredData.notes);
     }
@@ -199,7 +191,6 @@ const POS = () => {
     fetchHeldSalesCount();
   };
 
-  // Cart handlers
   const handleAddToCart = (product) => {
     if (product.stock_quantity <= 0) {
       toast.error('Out of stock');
@@ -216,8 +207,63 @@ const POS = () => {
     toast.success('Added to cart');
   };
 
+  // Handle quantity input change - update local state
+  const handleQuantityInputChange = (productId, inputValue) => {
+    // Allow empty string for typing
+    setQuantityInputs(prev => ({
+      ...prev,
+      [productId]: inputValue === '' ? '' : inputValue
+    }));
+  };
+
+  // Apply the quantity when input is committed
+  const handleQuantityCommit = (productId) => {
+    const item = cart.items?.find(i => Number(i.product_id) === Number(productId));
+    if (!item) return;
+    
+    let inputValue = quantityInputs[productId];
+    
+    // If input is empty or undefined, use current quantity
+    if (inputValue === '' || inputValue === undefined) {
+      setQuantityInputs(prev => {
+        const newState = { ...prev };
+        delete newState[productId];
+        return newState;
+      });
+      return;
+    }
+    
+    let newQuantity = parseInt(inputValue);
+    
+    // Validate input
+    if (isNaN(newQuantity) || newQuantity < 1) {
+      newQuantity = 1;
+    }
+    
+    // Check stock limit
+    if (newQuantity > item.stock) {
+      newQuantity = item.stock;
+      toast.error(`Maximum stock available: ${item.stock}`);
+    }
+    
+    // Only update if quantity changed
+    if (newQuantity !== item.quantity) {
+      dispatch(updateQuantity({ 
+        productId: Number(productId), 
+        quantity: newQuantity 
+      }));
+    }
+    
+    // Clear the input state for this product to show Redux value
+    setQuantityInputs(prev => {
+      const newState = { ...prev };
+      delete newState[productId];
+      return newState;
+    });
+  };
+
   const handleIncrement = (productId) => {
-    const item = cart.items.find(i => Number(i.product_id) === Number(productId));
+    const item = cart.items?.find(i => Number(i.product_id) === Number(productId));
     if (!item) return;
     
     if (item.quantity >= item.stock) {
@@ -230,10 +276,17 @@ const POS = () => {
       productId: Number(productId), 
       quantity: newQuantity 
     }));
+    
+    // Clear any pending input for this product
+    setQuantityInputs(prev => {
+      const newState = { ...prev };
+      delete newState[productId];
+      return newState;
+    });
   };
 
   const handleDecrement = (productId) => {
-    const item = cart.items.find(i => Number(i.product_id) === Number(productId));
+    const item = cart.items?.find(i => Number(i.product_id) === Number(productId));
     if (!item) return;
     
     if (item.quantity <= 1) {
@@ -246,11 +299,33 @@ const POS = () => {
         quantity: newQuantity 
       }));
     }
+    
+    // Clear any pending input for this product
+    setQuantityInputs(prev => {
+      const newState = { ...prev };
+      delete newState[productId];
+      return newState;
+    });
   };
 
   const handleRemoveItem = (productId) => {
     dispatch(removeFromCart(Number(productId)));
     toast.success('Item removed');
+    
+    // Clear input state for this product
+    setQuantityInputs(prev => {
+      const newState = { ...prev };
+      delete newState[productId];
+      return newState;
+    });
+  };
+
+  // Format currency safely
+  const formatCurrency = (amount) => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return '₦0';
+    }
+    return `₦${Number(amount).toLocaleString()}`;
   };
 
   if (loading) {
@@ -260,6 +335,12 @@ const POS = () => {
       </div>
     );
   }
+
+  // Safely get cart values
+  const cartItems = cart?.items || [];
+  const cartSubtotal = cart?.subtotal || 0;
+  const cartDiscount = cart?.discount || 0;
+  const cartTotal = cart?.total || 0;
 
   return (
     <div className="p-6">
@@ -307,7 +388,7 @@ const POS = () => {
                     }`}
                   >
                     <h3 className="font-semibold truncate">{product.name}</h3>
-                    <p className="text-lg font-bold text-blue-600">₦{Number(product.price).toLocaleString()}</p>
+                    <p className="text-lg font-bold text-blue-600">{formatCurrency(product.price)}</p>
                     <p className="text-sm text-gray-500">Stock: {product.stock_quantity}</p>
                   </div>
                 ))}
@@ -320,10 +401,9 @@ const POS = () => {
         <div className="lg:col-span-1">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sticky top-20">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <FiShoppingCart /> Cart ({cart.items.length})
+              <FiShoppingCart /> Cart ({cartItems.length})
             </h2>
             
-            {/* Hold Sales Button */}
             <button
               onClick={() => setShowHoldSales(true)}
               className="relative bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-700 transition flex items-center gap-2 mb-4 w-full justify-center"
@@ -337,89 +417,123 @@ const POS = () => {
               )}
             </button>
             
-            {cart.items.length === 0 ? (
+            {cartItems.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 Cart is empty
               </div>
             ) : (
               <>
                 <div className="space-y-4 max-h-96 overflow-auto mb-4">
-                  {cart.items.map((item) => (
-                    <div key={item.product_id} className="border-b pb-4">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h3 className="font-medium">{item.name}</h3>
-                          <p className="text-sm text-gray-500">₦{Number(item.price).toLocaleString()} each</p>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveItem(item.product_id)}
-                          className="text-red-600 hover:text-red-800 ml-2"
-                        >
-                          <FiX size={18} />
-                        </button>
-                      </div>
-                      
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center border rounded">
+                  {cartItems.map((item) => {
+                    // Determine what to show in the quantity input
+                    // If we have a pending input for this product, show that, otherwise show the Redux quantity
+                    const displayValue = quantityInputs[item.product_id] !== undefined 
+                      ? quantityInputs[item.product_id] 
+                      : item.quantity;
+                    
+                    return (
+                      <div key={item.product_id} className="border-b pb-4">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h3 className="font-medium">{item.name || 'Unknown Product'}</h3>
+                            <p className="text-sm text-gray-500">{formatCurrency(item.price)} each</p>
+                          </div>
                           <button
-                            onClick={() => handleDecrement(item.product_id)}
-                            className="px-2 py-1 hover:bg-gray-100"
+                            onClick={() => handleRemoveItem(item.product_id)}
+                            className="text-red-600 hover:text-red-800 ml-2"
                           >
-                            <FiMinus size={16} />
-                          </button>
-                          
-                          <span className="w-16 px-4 py-1 text-center border-x">
-                            {item.quantity}
-                          </span>
-                          
-                          <button
-                            onClick={() => handleIncrement(item.product_id)}
-                            className="px-2 py-1 hover:bg-gray-100"
-                            disabled={item.quantity >= item.stock}
-                          >
-                            <FiPlus size={16} />
+                            <FiX size={18} />
                           </button>
                         </div>
                         
-                        <span className="font-semibold">
-                          ₦{(Number(item.price) * item.quantity).toLocaleString()}
-                        </span>
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center border rounded">
+                            {/* Minus Button */}
+                            <button
+                              onClick={() => handleDecrement(item.product_id)}
+                              className="px-2 py-1 hover:bg-gray-100 transition-colors"
+                              type="button"
+                            >
+                              <FiMinus size={16} />
+                            </button>
+                            
+                            {/* Quantity Input */}
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={displayValue}
+                              onChange={(e) => {
+                                // Allow only numbers
+                                const value = e.target.value;
+                                if (value === '' || /^\d+$/.test(value)) {
+                                  handleQuantityInputChange(item.product_id, value);
+                                }
+                              }}
+                              onBlur={() => handleQuantityCommit(item.product_id)}
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleQuantityCommit(item.product_id);
+                                }
+                              }}
+                              className="w-16 px-2 py-1 text-center border-x focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              style={{ 
+                                MozAppearance: 'textfield',
+                                appearance: 'textfield'
+                              }}
+                            />
+                            
+                            {/* Plus Button */}
+                            <button
+                              onClick={() => handleIncrement(item.product_id)}
+                              className="px-2 py-1 hover:bg-gray-100 transition-colors"
+                              disabled={item.quantity >= (item.stock || 999)}
+                              type="button"
+                            >
+                              <FiPlus size={16} />
+                            </button>
+                          </div>
+                          
+                          <span className="font-semibold">
+                            {formatCurrency((Number(item.price) || 0) * (item.quantity || 0))}
+                          </span>
+                        </div>
+                        
+                        {item.quantity >= (item.stock || 999) && (
+                          <p className="text-xs text-red-500 mt-1">Max stock reached</p>
+                        )}
                       </div>
-                      
-                      {item.quantity >= item.stock && (
-                        <p className="text-xs text-red-500 mt-1">Max stock reached</p>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="border-t pt-4">
                   <div className="flex justify-between mb-2">
                     <span>Subtotal:</span>
-                    <span className="font-semibold">₦{Number(cart.subtotal).toLocaleString()}</span>
+                    <span className="font-semibold">{formatCurrency(cartSubtotal)}</span>
                   </div>
-                  {cart.discount > 0 && (
+                  {cartDiscount > 0 && (
                     <div className="flex justify-between mb-2 text-red-600">
                       <span>Discount:</span>
-                      <span>-₦{Number(cart.discount).toLocaleString()}</span>
+                      <span>-{formatCurrency(cartDiscount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between mb-4 text-lg font-bold">
                     <span>Total:</span>
-                    <span className="text-blue-600">₦{Number(cart.total).toLocaleString()}</span>
+                    <span className="text-blue-600">{formatCurrency(cartTotal)}</span>
                   </div>
 
                   <button
                     onClick={() => setShowCheckout(true)}
                     className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
                   >
-                    Checkout (₦{Number(cart.total).toLocaleString()})
+                    Checkout ({formatCurrency(cartTotal)})
                   </button>
                   
                   <div className="flex gap-2 mt-2">
                     <button
                       onClick={handleHoldSale}
-                      disabled={holdingSale || cart.items.length === 0}
+                      disabled={holdingSale || cartItems.length === 0}
                       className="flex-1 bg-yellow-600 text-white py-2 rounded-lg font-semibold hover:bg-yellow-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {holdingSale ? (
@@ -445,7 +559,6 @@ const POS = () => {
         </div>
       </div>
 
-      {/* Checkout Modal */}
       {showCheckout && (
         <Suspense fallback={
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -461,14 +574,12 @@ const POS = () => {
               setSelectedCustomer(null);
               setNotes('');
               toast.success('Sale completed!');
-              // Refresh held sales count in case any were converted
               fetchHeldSalesCount();
             }}
           />
         </Suspense>
       )}
 
-      {/* Hold Sales Modal */}
       {showHoldSales && (
         <Suspense fallback={
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

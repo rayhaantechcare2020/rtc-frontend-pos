@@ -19,6 +19,22 @@ export const reportService = {
     }
   },
 
+  getDailySalesByItem: async (params) => {
+    try {
+      const response = await api.get(`/reports/sales-by-item`, { 
+        params: {
+          from: params.from,
+          to: params.to,
+          ...params
+        } 
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching optimized daily sales by item:', error);
+      throw error;
+    }
+  },
+
   /**
    * Get top selling products
    * @param {Object} params - Query parameters (limit, from, to)

@@ -60,7 +60,7 @@ const Checkout = ({ cart, onClose, onComplete }) => {
   // Calculate totals
   const calculateTotals = () => {
     const subtotal = cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const discountAmount = (subtotal * (discount / 100)) || 0;
+    const discountAmount = discount || 0; //(subtotal * (discount / 100)) || 0;
     const finalTotal = subtotal - discountAmount;
     
     return { subtotal, discountAmount, finalTotal };
@@ -214,7 +214,7 @@ const Checkout = ({ cart, onClose, onComplete }) => {
 
   const updatePaymentAmount = (index, amount) => {
     const newPayments = [...payments];
-    newPayments[index].amount = parseFloat(amount) || 0;
+    newPayments[index].amount = parseFloat(amount);
     setPayments(newPayments);
   };
 
@@ -497,13 +497,13 @@ const Checkout = ({ cart, onClose, onComplete }) => {
                 </div>
                 
                 <div className="flex justify-between items-center">
-                  <span className="text-sm">Discount (%):</span>
+                  <span className="text-sm">Discount (amount):</span>
                   <input
                     type="number"
                     value={discount}
                     onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
                     min="0"
-                    max="100"
+                    max=""
                     step="1"
                     className="w-20 px-2 py-1 text-right border rounded text-sm"
                   />
@@ -734,10 +734,10 @@ const Checkout = ({ cart, onClose, onComplete }) => {
                       </label>
                       <input
                         type="number"
-                        value={payment.amount}
+                        value={payment.amount === 0 ? '' : payment.amount}
                         onChange={(e) => updatePaymentAmount(index, e.target.value)}
                         min="0"
-                        step="100"
+                        step="0.01"
                         className="w-full border rounded-lg px-2 py-1 text-sm"
                         placeholder="0.00"
                         disabled={isCreditOnly && payment.method === 'credit'}

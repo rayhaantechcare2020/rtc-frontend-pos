@@ -153,6 +153,26 @@ async createPayment(paymentData) {
     }
   },
 
+// services/payment.js - Add/Update this method
+
+async writeOffBalance(data) {
+  try {
+    console.log('Sending write-off data:', data);
+    const response = await api.post('/payments/write-off', {
+      customer_id: data.customer_id,
+      sale_id: data.sale_id || null,
+      amount: data.amount,
+      reason: data.reason,
+      notes: data.notes || ''
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error writing off balance:', error.response?.data || error);
+    throw error;
+  }
+},
+
+
   /**
    * Reverse a payment (if needed)
    * @param {number} id - Payment ID

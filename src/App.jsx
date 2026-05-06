@@ -67,6 +67,7 @@ import SalesRange from './components/Reports/SalesRange';
 import CustomerSummary from './components/Reports/CustomerSummary';
 import InventorySummary from './components/Reports/InventorySummary';
 import BankTransactionReport from './components/Reports/BankTransactionReport';
+import SalesByItem from './components/Reports/SalesByItem';
 
 
 //Vendors
@@ -193,6 +194,7 @@ function App(){
             <Route path="reports/profit-loss" element={<RoleBasedRoute allowedRoles={['admin','manager']}> <ProfitLoss /> </RoleBasedRoute>} />
             <Route path="reports/daily" element={<RoleBasedRoute allowedRoles={['admin','manager']}> <DailySales /> </RoleBasedRoute>} />
             <Route path="reports/sales-range" element={<RoleBasedRoute allowedRoles={['admin','manager']}> <SalesRange /> </RoleBasedRoute>} />
+            <Route path="reports/sales-by-item" element={<RoleBasedRoute allowedRoles={['admin','manager']}> <SalesByItem /> </RoleBasedRoute>} />
             <Route path="reports/customers" element={<RoleBasedRoute allowedRoles={['admin','manager']}> <CustomerSummary /> </RoleBasedRoute>} />
             <Route path="reports/inventory" element={<RoleBasedRoute allowedRoles={['admin','manager']}> <InventorySummary /> </RoleBasedRoute>} />
             <Route path="settings" element={<RoleBasedRoute allowedRoles={['admin']}> <Settings /> </RoleBasedRoute>} />
